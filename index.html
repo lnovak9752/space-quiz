@@ -114,6 +114,14 @@
     .result-stats strong { display: block; font-size: 19px; margin-bottom: 4px; }
     .result-stats span { color: var(--muted); font-size: 11px; }
     .result-stats > div + div { border-left: 1px solid var(--line); }
+    .review-toggle { width: 100%; min-height: 44px; margin-top: 10px; padding: 11px 14px; border: 1px solid var(--control-border); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+    .review-toggle:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .missed-answers { display: grid; gap: 12px; margin-top: 14px; text-align: left; }
+    .missed-answer { min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+    .missed-answer h3 { margin: 0 0 10px; font-size: 15px; line-height: 1.45; }
+    .missed-answer p { margin: 4px 0; }
+    .missed-answer .explanation { margin-top: 10px; color: var(--muted); }
+    .no-missed-answers { margin: 15px 0 0; color: var(--muted); font-size: 14px; }
     @keyframes float { 50% { translate: 0 -7px; } }
     @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
     @keyframes correct-pop { 50% { transform: scale(1.025); } }
@@ -217,6 +225,11 @@
             <div><strong id="wrong-total"></strong><span>To discover</span></div>
             <div><strong id="accuracy"></strong><span>Accuracy</span></div>
           </div>
+          <div id="review-area" hidden>
+            <p id="no-missed-answers" class="no-missed-answers" hidden>No missed answers. You got every question right!</p>
+            <button id="review-toggle" class="review-toggle" type="button" aria-expanded="false" aria-controls="missed-answers">Review missed answers</button>
+            <div id="missed-answers" class="missed-answers" hidden></div>
+          </div>
           <button id="restart" class="primary">Explore again <span aria-hidden="true">↗</span></button>
         </section>
       </div>
@@ -243,6 +256,7 @@
     let current = 0;
     let score = 0;
     let answered = false;
+    let missedAnswers = [];
     const progress = document.querySelector('[role="progressbar"]');
 
     function updateProgress(completed) {
@@ -284,6 +298,12 @@
       const item = questions[current];
       const correct = selected === item.correct;
       if (correct) score++;
+      else missedAnswers.push({
+        question: item.question,
+        selectedAnswer: item.answers[selected],
+        correctAnswer: item.answers[item.correct],
+        fact: item.fact
+      });
       Array.from($("answers").children).forEach((button, index) => {
         button.disabled = true;
         if (index === item.correct || (index === selected && !correct)) {
@@ -337,6 +357,34 @@
       $("wrong-total").textContent = questions.length - score;
       $("accuracy").textContent = `${score * 10}%`;
       $("result-summary").textContent = `${score} out of ${questions.length} questions answered correctly. ${score * 10}% accuracy.`;
+      $("review-area").hidden = false;
+      $("no-missed-answers").hidden = missedAnswers.length > 0;
+      $("review-toggle").hidden = missedAnswers.length === 0;
+      $("review-toggle").setAttribute("aria-expanded", "false");
+      $("review-toggle").textContent = "Review missed answers";
+      $("missed-answers").hidden = true;
+      $("missed-answers").replaceChildren();
+      missedAnswers.forEach((missed) => {
+        const entry = document.createElement("article");
+        entry.className = "missed-answer";
+        const question = document.createElement("h3");
+        question.textContent = missed.question;
+        const selectedAnswer = document.createElement("p");
+        const selectedLabel = document.createElement("strong");
+        selectedLabel.textContent = "Your answer (incorrect): ";
+        selectedAnswer.append(selectedLabel, document.createTextNode(missed.selectedAnswer));
+        const correctAnswer = document.createElement("p");
+        const correctLabel = document.createElement("strong");
+        correctLabel.textContent = "Correct answer: ";
+        correctAnswer.append(correctLabel, document.createTextNode(missed.correctAnswer));
+        const explanation = document.createElement("p");
+        explanation.className = "explanation";
+        const explanationLabel = document.createElement("strong");
+        explanationLabel.textContent = "Why: ";
+        explanation.append(explanationLabel, document.createTextNode(missed.fact));
+        entry.append(question, selectedAnswer, correctAnswer, explanation);
+        $("missed-answers").append(entry);
+      });
       $("hint").textContent = "Stay curious. There's always more out there.";
       $("result-title").focus();
     }
@@ -347,12 +395,25 @@
       if (current === questions.length) showResults();
       else renderQuestion(true);
     });
+    $("review-toggle").addEventListener("click", () => {
+      const expanded = $("review-toggle").getAttribute("aria-expanded") !== "true";
+      $("review-toggle").setAttribute("aria-expanded", String(expanded));
+      $("review-toggle").textContent = expanded ? "Hide missed answers" : "Review missed answers";
+      $("missed-answers").hidden = !expanded;
+    });
     $("restart").addEventListener("click", () => {
       current = 0; score = 0;
+      missedAnswers = [];
       $("results").hidden = true;
       $("results").classList.remove("celebrating");
       $("celebration-badge").hidden = true;
       $("confetti").replaceChildren();
+      $("review-area").hidden = true;
+      $("review-toggle").setAttribute("aria-expanded", "false");
+      $("review-toggle").textContent = "Review missed answers";
+      $("missed-answers").hidden = true;
+      $("missed-answers").replaceChildren();
+      $("no-missed-answers").hidden = true;
       $("quiz").hidden = false;
       $("hint").textContent = "Take your time. Even light needs a little to travel.";
       updateProgress(0);
